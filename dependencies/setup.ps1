@@ -29,8 +29,9 @@ function InstallPython
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
 }
 
+Write-Host "VERIFIFYING PYTHON INSTALLATION:" -ForegroundColor Blue
+
 # Get the version of python
-Write-Host "Detecting Python..." -ForegroundColor Blue
 $p = &{ python -V } 2>&1
 
 # Check if an ErrorRecord was returned
@@ -50,6 +51,7 @@ if ($version -match "Python (\d+\.\d+\.\d+)")
 {
     $installedVersion = [Version]$matches[1]
     $minVersion = [Version]"3.9.0"
+    $minVersionString = "3.9.0"
 
     # Compare the installed version with the minimum required version
     if ($installedVersion -ge $minVersion)
@@ -60,7 +62,7 @@ if ($version -match "Python (\d+\.\d+\.\d+)")
     }
     else
     {
-        Write-Host "WARNING: Installed Python version is older than 3.9." -ForegroundColor Yellow
+        Write-Host "Python version $version is installed, but does not meet the required version: $minVersionString." -ForegroundColor Red
         Write-Host -NoNewline -ForegroundColor Green "Would you like to install Python 3.13.0? (Y/n): "
         $userResponse = Read-Host
 
@@ -71,12 +73,15 @@ if ($version -match "Python (\d+\.\d+\.\d+)")
         else
         {
             Write-Host "Cannot continue with your current version of Python. Exiting..." -ForegroundColor Yellow
+            Exit
         }
     }
 }
 else
 {
-    Write-Host "WARNING: Python is not currently installed." -ForegroundColor Yellow
+    $minVersionString = "3.9.0"
+
+    Write-Host "Python is not currently installed. Required minimum version: $minVersionString" -ForegroundColor Red
     Write-Host -NoNewline -ForegroundColor Green "Would you like to install Python 3.13.0? (Y/n): "
     $userResponse = Read-Host
 
@@ -86,7 +91,8 @@ else
     }
     else
     {
-        Write-Host "Python installation declined." -ForegroundColor Yellow
+        Write-Host "Cannot run without Python installation. Exiting..." -ForegroundColor Yellow
+        Exit
     }
 }
 
@@ -128,25 +134,34 @@ else
 Write-Host "Finished Python setup." -ForegroundColor Green
 Write-Host "`n"
 
-# Run setup_cmake.py
-python (Join-Path -Path $scriptDir -ChildPath "main.py")
+
+# Run the Python script and capture the exit code
+$pythonCMakeScriptPath = Join-Path -Path $scriptDir -ChildPath "setup_cmake.py"
+$pythonCMakeProcess = Start-Process -FilePath "python" -ArgumentList $pythonCMakeScriptPath -NoNewWindow -PassThru -Wait
+$pythonExitCode = $pythonCMakeProcess.ExitCode
+
+if ($pythonExitCode -eq 1)
+{
+    Exit
+}
+
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
 
 # Verify CMake installation
 try
 {
-    Write-Host "Detecting CMake..." -ForegroundColor Blue
+    Write-Host "VERIFIFYING CMAKE INSTALLATION:" -ForegroundColor Blue
 
     # Get CMake version
-    $cmakeVersionOutput = cmake --version
-    if ($cmakeVersionOutput -match "cmake version (\d+\.\d+\.\d+)")
+    $cmakeVersionOutput = & cmake --version
+    $cmakeVersion = ($cmakeVersionOutput -split "cmake version ")[1] -split "`n" | Select-Object -First 1
+    if ($cmakeVersion -match "\d+\.\d+\.\d+")
     {
-        $cmakeVersion = $matches[1]
         Write-Host "Found CMake version: $cmakeVersion" -ForegroundColor Green
     }
     else
     {
-        Write-Host "ERROR: CMake version could not be verfied" -ForegroundColor Red
+        Write-Host "ERROR: CMake version could not be verified" -ForegroundColor Red
     }
 
     # Get CMake executable path
@@ -159,8 +174,85 @@ catch
     Write-Host "ERROR: : $_" -ForegroundColor Red
 }
 
+# Run the Python script and capture the exit code
+$pythonNinjaScriptPath = Join-Path -Path $scriptDir -ChildPath "setup_ninja.py"
+$pythonNinjaProcess = Start-Process -FilePath "python" -ArgumentList $pythonNinjaScriptPath -NoNewWindow -PassThru -Wait
+$ninjaExitCode = $pythonNinjaProcess.ExitCode
+
+if ($ninjaExitCode -eq 1)
+{
+    Exit
+}
+
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+
+# Verify Ninja installation
+try
+{
+    Write-Host "VERIFIFYING NINJA INSTALLATION:" -ForegroundColor Blue
+
+    # Capture Ninja version
+    $ninjaVersionOutput = & ninja --version
+    if ($ninjaVersionOutput -match "(\d+\.\d+\.\d+)")
+    {
+        $ninjaVersion = $matches[1]
+        Write-Host "Found Ninja version: $ninjaVersion" -ForegroundColor Green
+    }
+
+    else
+    {
+        Write-Host "ERROR: Ninja version could not be verified" -ForegroundColor Red
+    }
+
+    # Get Ninja executable path
+    $ninjaPath = Get-Command ninja | Select-Object -ExpandProperty Path
+    Write-Host "Found Ninja Executable: $ninjaPath" -ForegroundColor Green
+
+}
+catch
+{
+    Write-Host "ERROR: $_" -ForegroundColor Red
+}
+
+# Run the Python script and capture the exit code
+$pythonClangScriptPath = Join-Path -Path $scriptDir -ChildPath "setup_clang.py"
+$pythonClangProcess = Start-Process -FilePath "python" -ArgumentList $pythonClangScriptPath -NoNewWindow -PassThru -Wait
+$clangExitCode = $pythonClangProcess.ExitCode
+
+if ($clangExitCode -eq 1)
+{
+    Exit
+}
+
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+
+# Verify Clang installation
+try
+{
+    Write-Host "VERIFIFYING CLANG INSTALLATION:" -ForegroundColor Blue
+
+    # Capture Clang version
+    $clangVersionOutput = & clang --version
+    $clangVersion = ($clangVersionOutput -split "clang version ")[1] -split "`n" | Select-Object -First 1
+    if ($clangVersion -match "(\d+\.\d+\.\d+)")
+    {
+        $clangVersion = $matches[1]
+        Write-Host "Found Clang version: $clangVersion" -ForegroundColor Green
+    }
+    else
+    {
+        Write-Host "ERROR: Clang version could not be verified" -ForegroundColor Red
+    }
+
+    # Get Clang executable path
+    $clangPath = Get-Command clang | Select-Object -ExpandProperty Path
+    Write-Host "Found Clang Executable: $clangPath" -ForegroundColor Green
+
+}
+catch
+{
+    Write-Host "ERROR: $_" -ForegroundColor Red
+}
+
 Write-Host "`n"
-Write-Host "*****************************************" -ForegroundColor Cyan
-Write-Host "`n--- Success. You can now exit... ---`n" -ForegroundColor Cyan
-Write-Host "*****************************************" -ForegroundColor Cyan
-Write-Host "`n"
+Write-Host "All Finished. You can now exit..." -ForegroundColor Green

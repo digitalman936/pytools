@@ -25,6 +25,11 @@ def print_success(message):
 
 def print_error(message):
     print(f"[red]{message}[/red]")
+    sys.exit(1)
+
+
+def print_error_prompt(message):
+    print(f"[red]{message}[/red]")
 
 
 def print_warning(message):
@@ -40,7 +45,6 @@ def download_file(url, dest_path):
         print_success("Download completed successfully.")
     else:
         print_error(f"Error: Failed to download file. Status code: {response.status_code}")
-        sys.exit(1)
 
 
 def install_cmake(installer_path):
@@ -57,7 +61,12 @@ def install_cmake(installer_path):
         print_success("CMake was installed successfully.")
     else:
         print_error("Error: CMake installation failed.")
-        sys.exit(1)
+
+    # Cleanup
+    try:
+        os.remove(installer_path)
+    except OSError as e:
+        print_error(f"Error cleaning up installer: {e}")
 
 
 def prompt_and_install_cmake():
@@ -69,11 +78,11 @@ def prompt_and_install_cmake():
     if response.lower() in ('y', ''):
         setup_cmake()
     else:
-        print_error("Cannot continue without the required version of CMake.")
+        print_warning("Cannot continue without the required version of CMake. Exiting...")
+        sys.exit(1)
 
 
 def setup_cmake():
-    print_header("--- Starting CMake Setup Script ---")
     installer_url = "https://github.com/Kitware/CMake/releases/download/v3.31.1/cmake-3.31.1-windows-x86_64.msi"
     temp_dir = tempfile.gettempdir()
     installer_path = Path(temp_dir) / "cmake-3.31.1-windows-x86_64.msi"
@@ -81,11 +90,7 @@ def setup_cmake():
     download_file(installer_url, installer_path)
     install_cmake(installer_path)
 
-    # Cleanup
-    try:
-        os.remove(installer_path)
-    except OSError as e:
-        print_error(f"Error cleaning up installer: {e}")
+    print_success("Finished CMake setup\n\n")
 
 
 def check_cmake_version(minimum_version=CMAKE_MINIMUM_REQUIRED_VERSION):
@@ -99,19 +104,21 @@ def check_cmake_version(minimum_version=CMAKE_MINIMUM_REQUIRED_VERSION):
         if version_tuple >= minimum_version:
             return True
         else:
-            print_error(
-                f"CMake version {version_str} is installed, but it does not meet the required version {'.'.join(map(str, minimum_version))}.")
+            print_error_prompt(
+                f"\nCMake version {version_str} is installed, but it does not meet the required version {'.'.join(map(str, minimum_version))}.")
             prompt_and_install_cmake()
             return False
 
     except subprocess.CalledProcessError:
-        print_error("CMake encountered an error.")
         prompt_and_install_cmake()
-        return False
     except FileNotFoundError:
-        print_warning("WARNING: CMake is not currently installed.")
+        print_error_prompt(
+            f"\nCMake is not currently installed. Required minimum version: {'.'.join(map(str, minimum_version))}.")
         prompt_and_install_cmake()
-        return False
     except AttributeError:
         print_error("Error parsing CMake version.")
-        return False
+
+
+if __name__ == "__main__":
+    check_cmake_version()
+    sys.exit(0)
