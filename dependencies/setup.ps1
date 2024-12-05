@@ -254,5 +254,70 @@ catch
     Write-Host "ERROR: $_" -ForegroundColor Red
 }
 
+# Run the Python script and capture the exit code
+$pythonVulkanScriptPath = Join-Path -Path $scriptDir -ChildPath "setup_vulkan.py"
+$pythonVulkanProcess = Start-Process -FilePath "python" -ArgumentList $pythonVulkanScriptPath -NoNewWindow -PassThru -Wait
+$vulkanExitCode = $pythonVulkanProcess.ExitCode
+
+if ($vulkanExitCode -eq 1)
+{
+    Exit
+}
+
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+# Check if the VULKAN_SDK environment variable is set
+$vulkanSdkPath = [System.Environment]::GetEnvironmentVariable("VULKAN_SDK", "Machine")
+
+Write-Host "VERIFIFYING VULKAN INSTALLATION:" -ForegroundColor Blue
+
+if (-not $vulkanSdkPath)
+{
+    Write-Host "ERROR: Could not find the VULKAN_SDK variable" -ForegroundColor Red
+    Exit
+}
+else
+{
+    Write-Host "Found Vulkan: $vulkanSdkPath" -ForegroundColor Green
+}
+
+# Verify if Vulkan utilities are available
+try
+{
+    # Check if vulkaninfo exists
+    $vulkanInfo = Get-Command vulkaninfo -ErrorAction Stop
+    Write-Host "Found VulkanInfo tool: $( $vulkanInfo.Path )" -ForegroundColor Green
+
+    # Run vulkaninfo to verify it executes without error but suppress output
+    & vulkaninfo > $null
+
+    # Check other tools for further verification if needed
+    # For example: Get-Command glslangValidator -ErrorAction Stop
+}
+catch
+{
+    Write-Host "ERROR: $_" -ForegroundColor Red
+}
+
+# Optionally check versions through outputs of Vulkan-specific commands
+try
+{
+    $vulkanVersion = & vulkaninfo | Select-String "Vulkan Instance Version"
+
+    if ($vulkanVersion)
+    {
+        # Extract exact version for output
+        $vulkanVersionText = $vulkanVersion -replace ".*Vulkan Instance Version[^\d]*", ""
+        Write-Host "Found Vulkan Instance Version: $vulkanVersionText" -ForegroundColor Green
+    }
+    else
+    {
+        Write-Host "ERROR: Unable to determine Vulkan version from vulkaninfo output." -ForegroundColor Red
+    }
+}
+catch
+{
+    Write-Host "ERROR: $_" -ForegroundColor Red
+}
+
 Write-Host "`n"
 Write-Host "All Finished. You can now exit..." -ForegroundColor Green
