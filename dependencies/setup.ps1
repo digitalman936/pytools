@@ -29,7 +29,7 @@ function InstallPython
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
 }
 
-Write-Host "VERIFIFYING PYTHON INSTALLATION:" -ForegroundColor Blue
+# Write-Host "VERIFIFYING PYTHON INSTALLATION:" -ForegroundColor Blue
 
 # Get the version of python
 $p = &{ python -V } 2>&1
@@ -56,9 +56,9 @@ if ($version -match "Python (\d+\.\d+\.\d+)")
     # Compare the installed version with the minimum required version
     if ($installedVersion -ge $minVersion)
     {
-        Write-Host "Found Python version: $installedVersion" -ForegroundColor Green
+        # Write-Host "Found Python version: $installedVersion" -ForegroundColor Green
         $pythonExecutable = Get-Command python | Select-Object -ExpandProperty Path
-        Write-Host "Found Python Executable: $pythonExecutable" -ForegroundColor Green
+        # Write-Host "Found Python Executable: $pythonExecutable" -ForegroundColor Green
     }
     else
     {
@@ -101,12 +101,17 @@ Write-Host "Configuring python virtual environment..." -ForegroundColor Blue
 $scriptDir = Split-Path -Path $MyInvocation.MyCommand.Definition -Parent
 Set-Location -Path $scriptDir
 $venvPath = Join-Path -Path $scriptDir -ChildPath "..\.venv"
+
 if (Test-Path $venvPath)
 {
-    Write-Host "Existing virtual environment found. Removing..." -ForegroundColor Yellow
-    Remove-Item -Path $venvPath -Recurse -Force
+    Write-Host "Virtual environment already exists. skipping..." -ForegroundColor Yellow
 }
-python -m venv $venvPath
+else
+{
+    Write-Host "Creating new virtual environment..." -ForegroundColor Blue
+    python -m venv $venvPath
+}
+
 Write-Host "Activating python virtual environment..." -ForegroundColor Blue
 & "$venvPath\Scripts\Activate.ps1"
 if (-not ($env:VIRTUAL_ENV))
@@ -145,7 +150,70 @@ if ($pythonExitCode -eq 1)
     Exit
 }
 
+# Run the Python script and capture the exit code
+$pythonNinjaScriptPath = Join-Path -Path $scriptDir -ChildPath "setup_ninja.py"
+$pythonNinjaProcess = Start-Process -FilePath "python" -ArgumentList $pythonNinjaScriptPath -NoNewWindow -PassThru -Wait
+$ninjaExitCode = $pythonNinjaProcess.ExitCode
+
+if ($ninjaExitCode -eq 1)
+{
+    Exit
+}
+
+# Run the Python script and capture the exit code
+$pythonClangScriptPath = Join-Path -Path $scriptDir -ChildPath "setup_compiler.py"
+$pythonClangProcess = Start-Process -FilePath "python" -ArgumentList $pythonClangScriptPath -NoNewWindow -PassThru -Wait
+$clangExitCode = $pythonClangProcess.ExitCode
+
+if ($clangExitCode -eq 1)
+{
+    Exit
+}
+
+# Run the Python script and capture the exit code
+$pythonVulkanScriptPath = Join-Path -Path $scriptDir -ChildPath "setup_vulkan.py"
+$pythonVulkanProcess = Start-Process -FilePath "python" -ArgumentList $pythonVulkanScriptPath -NoNewWindow -PassThru -Wait
+$vulkanExitCode = $pythonVulkanProcess.ExitCode
+
+if ($vulkanExitCode -eq 1)
+{
+    Exit
+}
+
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+
+# Verify Python installation
+try
+{
+    Write-Host "VERIFYING PYTHON INSTALLATION:" -ForegroundColor Blue
+
+    # Get Python version
+    $pythonVersionOutput = & python --version 2>&1
+    if ($pythonVersionOutput -match "\d+\.\d+\.\d+")
+    {
+        Write-Host "Found Python version: $pythonVersionOutput" -ForegroundColor Green
+    }
+    else
+    {
+        Write-Host "ERROR: Python version could not be verified" -ForegroundColor Red
+    }
+
+    # Get Python executable path
+    $pythonPath = Get-Command python | Select-Object -ExpandProperty Definition
+    if ($pythonPath)
+    {
+        Write-Host "Found Python Executable: $pythonPath" -ForegroundColor Green
+    }
+    else
+    {
+        Write-Host "ERROR: Python executable could not be found" -ForegroundColor Red
+    }
+
+}
+catch
+{
+    Write-Host "ERROR: $_" -ForegroundColor Red
+}
 
 # Verify CMake installation
 try
@@ -173,18 +241,6 @@ catch
 {
     Write-Host "ERROR: : $_" -ForegroundColor Red
 }
-
-# Run the Python script and capture the exit code
-$pythonNinjaScriptPath = Join-Path -Path $scriptDir -ChildPath "setup_ninja.py"
-$pythonNinjaProcess = Start-Process -FilePath "python" -ArgumentList $pythonNinjaScriptPath -NoNewWindow -PassThru -Wait
-$ninjaExitCode = $pythonNinjaProcess.ExitCode
-
-if ($ninjaExitCode -eq 1)
-{
-    Exit
-}
-
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
 
 # Verify Ninja installation
 try
@@ -214,18 +270,6 @@ catch
     Write-Host "ERROR: $_" -ForegroundColor Red
 }
 
-# Run the Python script and capture the exit code
-$pythonClangScriptPath = Join-Path -Path $scriptDir -ChildPath "setup_clang.py"
-$pythonClangProcess = Start-Process -FilePath "python" -ArgumentList $pythonClangScriptPath -NoNewWindow -PassThru -Wait
-$clangExitCode = $pythonClangProcess.ExitCode
-
-if ($clangExitCode -eq 1)
-{
-    Exit
-}
-
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
-
 # Verify Clang installation
 try
 {
@@ -254,17 +298,6 @@ catch
     Write-Host "ERROR: $_" -ForegroundColor Red
 }
 
-# Run the Python script and capture the exit code
-$pythonVulkanScriptPath = Join-Path -Path $scriptDir -ChildPath "setup_vulkan.py"
-$pythonVulkanProcess = Start-Process -FilePath "python" -ArgumentList $pythonVulkanScriptPath -NoNewWindow -PassThru -Wait
-$vulkanExitCode = $pythonVulkanProcess.ExitCode
-
-if ($vulkanExitCode -eq 1)
-{
-    Exit
-}
-
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
 # Check if the VULKAN_SDK environment variable is set
 $vulkanSdkPath = [System.Environment]::GetEnvironmentVariable("VULKAN_SDK", "Machine")
 
@@ -318,6 +351,66 @@ catch
 {
     Write-Host "ERROR: $_" -ForegroundColor Red
 }
+
+
+# Run the Python script and capture the exit code
+$pythonVS2022ScriptPath = Join-Path -Path $scriptDir -ChildPath "setup_vs2022.py"
+$pythonVS2022Process = Start-Process -FilePath "python" -ArgumentList $pythonVS2022ScriptPath -NoNewWindow -PassThru -Wait
+$vs2022ExitCode = $pythonVS2022Process.ExitCode
+
+if ($vs2022ExitCode -eq 1)
+{
+    Exit
+}
+
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+
+# Verify Visual Studio 2022 installation
+Set-Location "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+
+# Get Visual Studio 2022 IDE instances in JSON format
+$vs2022_ide_instances = .\vswhere -version 17 -latest -products * -requires Microsoft.VisualStudio.Workload.NativeDesktop -format json | ConvertFrom-Json
+
+# Get Visual Studio 2022 Build Tools instances in JSON format
+$vs2022_build_tools_instances = .\vswhere -version 17 -latest -products * -requires Microsoft.VisualStudio.Workload.VCTools -format json | ConvertFrom-Json
+
+# Function to display paths for given instances
+function Display-Paths($instances, $type) {
+    foreach ($instance in $instances) {
+        $installPath = $instance.installationPath
+        $msbuildPath = Join-Path -Path $installPath -ChildPath "MSBuild\Current\Bin\MSBuild.exe"
+        $vcPath = Join-Path -Path $installPath -ChildPath "VC\Auxiliary\Build"
+        $vsDevCmdPath = Join-Path -Path $installPath -ChildPath "Common7\Tools\VsDevCmd.bat"
+
+        # Path to the VC tools version file
+        $vctoolsVersionFilePath = Join-Path -Path $vcPath -ChildPath "Microsoft.VCToolsVersion.default.txt"
+
+        # Check if the version file exists before trying to read
+        if (Test-Path -Path $vctoolsVersionFilePath) {
+            # Read the VC tools version from the text file
+            $vc_tools_version = Get-Content -Path $vctoolsVersionFilePath | ForEach-Object { $_.Trim() }
+
+            # Construct the path to the cl.exe compiler
+            $clPath = Join-Path -Path $installPath -ChildPath "VC\Tools\MSVC\$vc_tools_version\bin\Hostx64\x64\cl.exe"
+        } else {
+            $clPath = "VC tools version file not found."
+        }
+
+        Write-Host "$type Instance:"
+        Write-Host "Installation Path: $installPath"
+        Write-Host "MSBuild Path: $msbuildPath"
+        Write-Host "MSVC Path: $clPath"
+        Write-Host "VsDevCmd.bat Path: $vsDevCmdPath"
+        Write-Host "`n"
+    }
+}
+
+# Display paths for Visual Studio 2022 IDE
+Write-Host "VERIFYING VS2022 INSTALLATION:" -ForegroundColor Blue
+Display-Paths -instances $vs2022_ide_instances -type "Visual Studio 2022 IDE"
+
+# Display paths for Visual Studio 2022 Build Tools
+Display-Paths -instances $vs2022_build_tools_instances -type "Visual Studio 2022 Build Tools"
 
 Write-Host "`n"
 Write-Host "All Finished. You can now exit..." -ForegroundColor Green

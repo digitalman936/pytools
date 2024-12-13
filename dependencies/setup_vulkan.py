@@ -1,6 +1,7 @@
 import subprocess
 import sys
 import os
+import tempfile
 
 import requests
 from rich import print
@@ -58,23 +59,21 @@ def install_vulkan(installer_path):
             "com.lunarg.vulkan.volk",
             "com.lunarg.vulkan.vma",
             "com.lunarg.vulkan.debug"
-        ], check=True)
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         print_success("Vulkan SDK was installed successfully.")
     except subprocess.CalledProcessError as e:
         print_error(f"Error: Installation command failed with return code {e.returncode}")
 
     # Cleanup
-    print_step("Cleaning up installer...")
     try:
         os.remove(installer_path)
-        print_success("Cleanup completed successfully.")
     except OSError as e:
         print_error(f"Error cleaning up installer: {e}")
 
 
 def setup_vulkan():
     url = "https://sdk.lunarg.com/sdk/download/1.3.296.0/windows/VulkanSDK-1.3.296.0-Installer.exe"
-    installer_path = "VulkanSDK-Installer.exe"
+    installer_path = os.path.join(tempfile.gettempdir(), "VulkanSDK-Installer.exe")
 
     download_file(url, installer_path)
     install_vulkan(installer_path)
@@ -110,7 +109,7 @@ def check_vulkan_sdk_version():
         prompt_and_install_vulkan()
         return
 
-    # Extracting version from the VULKAN_SDK path
+    # Extracting the version from the VULKAN_SDK path
     version_str = vulkan_sdk_path.split('\\')[-1]
     required_version = '1.3.204.0'
 
